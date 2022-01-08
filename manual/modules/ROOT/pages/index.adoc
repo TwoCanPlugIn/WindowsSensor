@@ -1,0 +1,47 @@
+= Windows Sensor Plugin
+
+image:sensor_plugin_logo.png[]
+
+by Steven Adler [Stevead]
+
+https://github.com/twoCanPlugin/WindowsSensor[GitHub Repository]
+
+The Windows Sensor plugin is designed for use on computers such as the Microsoft Surface Pro that include a GPS chip. It uses the Windows Sensor API to obtain position data for use by OpenCPN.
+
+*Windows API Sensor values*
+
+[cols=",",options="header",]
+|===
+|Measurement |Units
+
+|Latitude | Degrees Minutes
+
+|Longitude | Degrees Minutes
+
+|Speed Over Ground | Knots
+
+|Course Over Ground | Degrees
+
+|True Heading | Degrees
+
+|Magnetic Heading | Degrees
+
+|Altitude | Metres
+
+|HDOP | Metres
+
+|DGPS Age | Minutes
+
+|DGPS Id | Integer
+
+|Satellites | Integer
+
+|Nmea Sentence^1^ | String
+
+|===
+
+
+1. The plugin generates a NMEA 0183 GGA sentence with the fields populated from the above values
+
+If you have any problems, please post questions on the OpenCPN forum or
+send an email to twocanplugin@hotmail.com
