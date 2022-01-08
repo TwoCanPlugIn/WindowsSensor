@@ -33,13 +33,13 @@ set(COMMON_NAME "Windows Sensor")
 set(TITLE_NAME "WINDOWSSENSOR")
 set(PACKAGE_CONTACT "twocanplugin@hotmail.com")
 set(PACKAGE "windows_sensor")
-set(SHORT_DESCRIPTION "Windows Sensor plugin, uses Windows Location Services to obtain a position fix.")
-set(LONG_DESCRIPTION "Windows Sensor plugin, uses Windows Location Services to obtain a position fix.") 
+set(SHORT_DESCRIPTION "Windows Sensor plugin, uses Windows Sensor API to obtain a position fix.")
+set(LONG_DESCRIPTION "Windows Sensor plugin, uses Windows Sensor API to obtain a position fix. Designed for Microsoft Surface computers with a GPS chip.") 
 set(VERSION_MAJOR "1")
 set(VERSION_MINOR "0")
 set(VERSION_PATCH "0")
 set(VERSION_TWEAK "0")
-set(VERSION_DATE "10/012/2022")
+set(VERSION_DATE "10/12/2022")
 set(OCPN_MIN_VERSION "ov50")
 set(OCPN_API_VERSION_MAJOR "1")
 set(OCPN_API_VERSION_MINOR "16")
@@ -113,9 +113,9 @@ include("PluginConfigure")
 ##
 
 ## We don't understand/use this definition
-##add_definitions(-DUSE_S57)
+## add_definitions(-DUSE_S57)
 
-##We don't install any SVG for toolbar icons
+## We don't install any SVG for toolbar icons
 ## add_definitions(-DPLUGIN_USE_SVG)
 
 ## Need api-16 for ocpn_plugin.h
@@ -130,6 +130,8 @@ SET(INCLUDE inc/sensor_plugin.h
             inc/sensor_plugin_icons.h)
 
 TARGET_SOURCES(${PACKAGE_NAME} PUBLIC ${SOURCE})
+
+# Link to these Windows libraries
 TARGET_LINK_LIBRARIES(${PACKAGE_NAME} sensorsapi comsuppwd)
 
 ##
