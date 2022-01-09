@@ -78,11 +78,11 @@ private:
 	// NMEA 0183 Checksum
 	wxString ComputeChecksum(wxString sentence);
 
-	// Uses Windows Sensor API to find and init a location sensor
+	// Uses Windows Sensor API to find, initialize and fetch data from a location sensor
 	bool InitializeSensor(void);
 	bool GetData(void);
 
-	// Position Fixes etc.
+	// The GPS variables
 	double latitude;
 	double longitude;
 	double speedOverGround;
@@ -102,6 +102,7 @@ private:
 	ISensorManager *sensorManager;
 	ISensor *sensor;
 
+	// If sensor has been initialized
 	bool isRunning;
 	
 };

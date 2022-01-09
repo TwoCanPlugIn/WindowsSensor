@@ -19,12 +19,19 @@
 
 //
 // Project: Windows Sensor Plugin
-// Description: Quick & Dirty Plugin to use WIndows Location Services (sensor api)
+// Description: Quick & Dirty Plugin to use Windows Location Services (sensor api)
 // Owner: twocanplugin@hotmail.com
 // Date: 10/01/2022
 // Version History: 
 // 1.0 Initial Release
 //
+
+// Note to self
+// Good reference: https://docs.microsoft.com/en-us/windows/win32/sensorsapi/portal
+// and https://docs.microsoft.com/en-us/windows/win32/sensorsapi/portal
+
+// Future thoughts
+// Support other sensors to generate XDR sentence for yaw, roll, pitch
 
 #include "sensor_plugin.h"
 #include "sensor_plugin_icons.h"
@@ -81,8 +88,9 @@ bool Windows_Sensor_Plugin::DeInit(void) {
 		sensorManager = NULL;
 		CoUninitialize();
 	}
+	isRunning = false;
 
-	return TRUE;
+	return true;
 }
 
 // Indicate what version of the OpenCPN Plugin API we support
@@ -125,42 +133,46 @@ bool Windows_Sensor_Plugin::InitializeSensor() {
 	sensorManager = NULL;
 	HRESULT hr;
 
+	// Unnecessary as COM appears to be initialized by wxWidgets
 	// Initialize the COM Object
-	hr = CoInitializeEx(0, COINIT_APARTMENTTHREADED);
-	if (hr != S_OK) {
-		return false;
-	}
+	///hr = CoInitializeEx(0, COINIT_MULTITHREADED);
+	//if (hr != S_OK) {
+	//	wxLogMessage(_T("Windows Sensor Plugin, COM Interface failed 0x%08lx"), hr);
+	//	return false;
+	//}
 
 	// Create an intance of the Sensor COM object
 	hr = CoCreateInstance(CLSID_SensorManager, 0, CLSCTX_ALL, __uuidof(ISensorManager), (void**)&sensorManager);
 
 	if ((hr != S_OK) || (sensorManager == NULL)) {
-		wxLogMessage(_T("Windows Sensor plugin, Sensor Manager is not initializated."));
+		wxLogMessage(_T("Windows Sensor Plugin, Sensor Manager is not initializated."));
 		CoUninitialize();
 		return false;
 	}
-	wxLogMessage(_T("Windows Sensor plugin, Sensor Manager initializated."));
+	wxLogMessage(_T("Windows Sensor Plugin, Sensor Manager initializated."));
 
 	ISensorCollection *sensorList = NULL;
 
-	hr = sensorManager->GetSensorsByCategory(SENSOR_CATEGORY_LOCATION, &sensorList);
+	// Specifically use a GPS device
+	//hr = sensorManager->GetSensorsByCategory(SENSOR_CATEGORY_LOCATION, &sensorList);
+	hr = sensorManager->GetSensorsByCategory(SENSOR_TYPE_LOCATION_GPS, &sensorList);
 	if ((hr != S_OK) || (sensorList == NULL)) {
-		wxLogMessage(_T("Windows Sensor plugin, No Location Sensors found"));
+		wxLogMessage(_T("Windows Sensor Plugin, No GPS Sensors found"));
 		CoUninitialize();
 		return false;
 	}
 
-	// BUG BUG Not sure why we need to also check the count
+	// BUG BUG Probably unnecessary
 	ULONG sensorsCount = 0;
 	hr = sensorList->GetCount(&sensorsCount);
 	if ((hr != S_OK) || (sensorsCount == 0)) {
-		wxLogMessage(_T("Windows Sensor Plugin, Location Sensor Count is zero"));
+		wxLogMessage(_T("Windows Sensor Plugin, GPS Sensor Count is zero"));
 		sensorList->Release();
 		CoUninitialize();
 		return false;
 	}
 
-	wxLogMessage(_T("Windows Sensor Plugin, Found %i sensor(s)"), sensorsCount);
+	wxLogMessage(_T("Windows Sensor Plugin, Found %i GPS sensor(s)"), sensorsCount);
 
 	// Iterate through the sensors, althouh we really just use the last one returned
 	for (unsigned int i = 0; i < sensorsCount; i++) {
@@ -179,49 +191,57 @@ bool Windows_Sensor_Plugin::InitializeSensor() {
 
 		// Convert the BSTR to a wxString
 		wxString sensorName = wxString::FromUTF8(_bstr_t(name));
-		wxLogMessage(_T("Windows Sensor Plugin, Sensor: %i, Name %s"), i, sensorName);
+		wxLogMessage(_T("Windows Sensor Plugin, GPS Sensor: %i, Name %s"), i, sensorName);
 
+		// Not really necessary, but useful for debugging purposes
+		SENSOR_ID guid;
+		hr = sensor->GetID(&guid);
+		if (hr == S_OK) {
+
+			wxLogMessage(_T("Windows Sensor Plugin: %08lX-%04hX-%04hX-%02hhX%02hhX-%02hhX%02hhX%02hhX%02hhX%02hhX%02hhX"),
+				guid.Data1, guid.Data2, guid.Data3,
+				guid.Data4[0], guid.Data4[1], guid.Data4[2], guid.Data4[3],
+				guid.Data4[4], guid.Data4[5], guid.Data4[6], guid.Data4[7]);
+		}
+
+		// Not really necessary, but again, useful for debugging purposes
 		SensorState state;
 		hr = sensor->GetState(&state);
-		if (hr != S_OK) {
-			continue;
+		if (hr == S_OK) {
+
+			wxString sensorState = wxEmptyString;
+
+			switch (state) {
+				case SENSOR_STATE_READY || SENSOR_STATE_MIN:
+					sensorState = "Ready";
+					break;
+				case SENSOR_STATE_NOT_AVAILABLE:
+					sensorState = "Not Available";
+					break;
+				case SENSOR_STATE_INITIALIZING:
+					sensorState = "Initializing";
+					break;
+				case SENSOR_STATE_ERROR:
+					sensorState = "Error";
+					break;
+				case SENSOR_STATE_ACCESS_DENIED:
+					sensorState = "Access Denied";
+					break;
+				case SENSOR_STATE_NO_DATA:
+					sensorState = "No Data";
+					break;
+				default:
+					sensorState = "Unknown";
+					break;
+			}
+
+			wxLogMessage(_T("Windows Sensor Plugin, GPS sensor state: %s"), sensorState);
 		}
 
-		// Not really necessary, but worth logging for debug purposes
-		wxString sensorState = wxEmptyString;
-
-		switch (state) {
-			case SENSOR_STATE_READY || SENSOR_STATE_MIN:
-				sensorState = "Ready";
-				break;
-			case SENSOR_STATE_NOT_AVAILABLE:
-				sensorState = "Not Available";
-				break;
-			case SENSOR_STATE_INITIALIZING:
-				sensorState = "Initializing";
-				break;
-			case SENSOR_STATE_ERROR:
-				sensorState = "Error";
-				break;
-			case SENSOR_STATE_ACCESS_DENIED:
-				sensorState = "Access Denied";
-				break;
-			case SENSOR_STATE_NO_DATA:
-				sensorState = "No Data";
-				break;
-			default:
-				sensorState = "Unknown";
-				break;
-		}
-		
-		wxLogMessage(_T("Windows Sensor Plugin, Sensors State: %s"), sensorState);
-
-		if (state != SENSOR_STATE_READY && state != SENSOR_STATE_MIN) {
-			continue;
-		}
 	}
 	return true;
 }
+
 
 bool Windows_Sensor_Plugin::GetData(void) {
 	HRESULT hr = 0;
@@ -231,11 +251,12 @@ bool Windows_Sensor_Plugin::GetData(void) {
 	if (hr != S_OK) {
 		return false;
 	}
+
+	// No position fix yet....
 	if ((state != SENSOR_STATE_READY) || (state != SENSOR_STATE_MIN)) {
 		return false;
 	}
 
-	
 	ISensorDataReport *sensorData = NULL;
 	hr = sensor->GetData(&sensorData);
 	
@@ -243,6 +264,7 @@ bool Windows_Sensor_Plugin::GetData(void) {
 		return false;
 	}
 
+	// Iterate through the data values
 	IPortableDeviceKeyCollection *keyList = NULL;
 	hr = sensor->GetSupportedDataFields(&keyList);
 
@@ -254,6 +276,7 @@ bool Windows_Sensor_Plugin::GetData(void) {
 	keyList->GetCount(&keysCount);
 	
 	if ((hr != S_OK) || (keysCount == 0)) {
+		wxLogMessage(_T("Windows Sensor Plugin, No data values."));
 		return false;
 	}
 
@@ -261,8 +284,9 @@ bool Windows_Sensor_Plugin::GetData(void) {
 		PROPERTYKEY sensorDataKey;
 		keyList->GetAt(i, &sensorDataKey);
 
+		// ignore values that are not of interest to us
 		if (sensorDataKey.fmtid != SENSOR_DATA_TYPE_LOCATION_GUID)	{
-			return false;
+			continue;
 		}
 
 		// Get the value
@@ -277,7 +301,8 @@ bool Windows_Sensor_Plugin::GetData(void) {
 			longitude = sensorDataValue.dblVal;
 		}
 		
-		else if (sensorDataKey == SENSOR_DATA_TYPE_ALTITUDE_ELLIPSOID_METERS) {
+
+		else if (sensorDataKey == SENSOR_DATA_TYPE_ALTITUDE_ANTENNA_SEALEVEL_METERS) {
 			altitude = sensorDataValue.dblVal;
 		}
 		
@@ -288,6 +313,7 @@ bool Windows_Sensor_Plugin::GetData(void) {
 		else if (sensorDataKey == SENSOR_DATA_TYPE_HORIZONAL_DILUTION_OF_PRECISION)	{
 			hDOP = sensorDataValue.dblVal;
 		}
+
 		else if (sensorDataKey == SENSOR_DATA_TYPE_GEOIDAL_SEPARATION) {
 			geoidalSeparation = sensorDataValue.dblVal;
 		}
@@ -323,20 +349,25 @@ bool Windows_Sensor_Plugin::GetData(void) {
 		else if (sensorDataKey == SENSOR_DATA_TYPE_NMEA_SENTENCE) {
 			BSTR sentence = sensorDataValue.bstrVal;
 			wxString nmeaSentence = wxString::FromUTF8(_bstr_t(sentence));
+			wxLogMessage(_T("Windows Sensor Plugin, NMEA Sentence: %s"), nmeaSentence);
 		}
 
-		keyList->Release();
 	}
+	keyList->Release();
 	return true;
 }
 
-void Windows_Sensor_Plugin::Notify() {
-	if (GetData()) {
+
 // $--GGA, hhmmss.ss, llll.ll, a, yyyyy.yy, a, x, xx, x.x, x.x, M, x.x, M, x.x, xxxx*hh<CR><LF>
 //                                             |  |   hdop         geoidal  age refID 
 //                                             |  |        Alt
 //                                             | sats
 //                                           fix Qualty
+
+// BUG BUG we could just use the sentence provided by the sensor !!
+void Windows_Sensor_Plugin::Notify() {
+	if (GetData()) {
+
 		double latitudeDegrees = trunc(latitude);
 		double latitudeMinutes = (latitude - latitudeDegrees) * 60;
 
@@ -360,7 +391,7 @@ void Windows_Sensor_Plugin::Notify() {
 		sentence.Append(wxT("\r\n"));
 		// Send to OpenCPN
 		PushNMEABuffer(sentence);
-
+		wxLogMessage(_T("Windows Sensor Plugin, Generated sentence: %s"), sentence);
 	}
 }
 
