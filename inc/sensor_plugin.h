@@ -21,6 +21,7 @@
 #define WINDOWS_SENSOR_PLUGIN_H
 
 // Windows COM and Sensor API
+#define _WINSOCKAPI_
 #include <comutil.h>
 #include <sensorsapi.h>
 #include <sensors.h>
