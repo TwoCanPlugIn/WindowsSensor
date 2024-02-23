@@ -24,7 +24,7 @@
 // Date: 10/01/2022
 // Version History: 
 // 1.0 Initial Release
-//
+// 1.0.1 23/02/2024 Enable/Disable Debug logging, Fix GGA sentence when FixType not DGPS
 
 // Note to self
 // Good reference: https://docs.microsoft.com/en-us/windows/win32/sensorsapi/portal
@@ -64,8 +64,13 @@ int Windows_Sensor_Plugin::Init(void) {
 	parentWindow = GetOCPNCanvasWindow();
 
 	// Maintain a reference to the OpenCPN configuration object 
-	// Although we don't actually use it
+	// Users need to manually add this section to enable debug logging of NMEA sentences
 	configSettings = GetOCPNConfigObject();
+
+	if (configSettings) {
+		configSettings->SetPath(_T("/PlugIns/WindowsSensor"));
+		configSettings->Read(_T("Verbose"), &isVerbose, 0);
+	}
 
 	// Initialize the Windows Sensor
 	isRunning = InitializeSensor();
@@ -349,7 +354,9 @@ bool Windows_Sensor_Plugin::GetData(void) {
 		else if (sensorDataKey == SENSOR_DATA_TYPE_NMEA_SENTENCE) {
 			BSTR sentence = sensorDataValue.bstrVal;
 			wxString nmeaSentence = wxString::FromUTF8(_bstr_t(sentence));
-			wxLogMessage(_T("Windows Sensor Plugin, NMEA Sentence: %s"), nmeaSentence);
+			if (isVerbose) {
+				wxLogMessage(_T("Windows Sensor Plugin, NMEA Sentence: %s"), nmeaSentence);
+			}
 		}
 
 	}
@@ -377,11 +384,24 @@ void Windows_Sensor_Plugin::Notify() {
 		wxDateTime tm = wxDateTime::Now();
 
 		// Generate the GGA sentence
-		wxString sentence = wxString::Format("$IIGGA,%s,%02.0f%07.4f,%c,%03.0f%07.4f,%c,%d,%d,%.2f,%.1f,M,%.1f,M,%.1f,%d", \
+		wxString sentence;
+		// Differential GPS has differential GPS Age and Reference Station Id values
+		if (fixType == 2) {
+			sentence = wxString::Format("$IIGGA,%s,%02.0f%07.4f,%c,%03.0f%07.4f,%c,%d,%d,%.2f,%.1f,M,%.1f,M,%.1f,%d", \
 			tm.Format("%H%M%S").ToAscii(), fabs(latitudeDegrees), fabs(latitudeMinutes), latitudeDegrees >= 0 ? 'N' : 'S', \
 			fabs(longitudeDegrees), fabs(longitudeMinutes), longitudeDegrees >= 0 ? 'E' : 'W', \
 			fixType, numberOfSatellites, (double)hDOP , (double)altitude, \
 			(double)geoidalSeparation, dgpsAge, dgpsReferenceId);
+		}
+		// Other Fix Types differential GPS Age and Reference Station Id values are NULL
+		// BUG BUG Fix Type = 0 means no fix !
+		else {
+			sentence = wxString::Format("$IIGGA,%s,%02.0f%07.4f,%c,%03.0f%07.4f,%c,%d,%d,%.2f,%.1f,M,%.1f,M,,", \
+			tm.Format("%H%M%S").ToAscii(), fabs(latitudeDegrees), fabs(latitudeMinutes), latitudeDegrees >= 0 ? 'N' : 'S', \
+			fabs(longitudeDegrees), fabs(longitudeMinutes), longitudeDegrees >= 0 ? 'E' : 'W', \
+			fixType, numberOfSatellites, (double)hDOP , (double)altitude, \
+			(double)geoidalSeparation);
+		}
 
 		// Calculate & append checksum
 		sentence.Trim();
@@ -391,7 +411,9 @@ void Windows_Sensor_Plugin::Notify() {
 		sentence.Append(wxT("\r\n"));
 		// Send to OpenCPN
 		PushNMEABuffer(sentence);
-		wxLogMessage(_T("Windows Sensor Plugin, Generated sentence: %s"), sentence);
+		if (isVerbose) {
+			wxLogMessage(_T("Windows Sensor Plugin, Generated sentence: %s"), sentence);
+		}
 	}
 }
 
