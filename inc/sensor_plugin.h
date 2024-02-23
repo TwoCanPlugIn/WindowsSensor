@@ -105,6 +105,9 @@ private:
 
 	// If sensor has been initialized
 	bool isRunning;
+
+	// Debug output
+	bool isVerbose;
 	
 };
 
