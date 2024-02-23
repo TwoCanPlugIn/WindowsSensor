@@ -36,6 +36,7 @@
 #endif
 #include <wx/timer.h>
 #include <wx/string.h>
+#include <wx/fileconf.h>
 
 // Defines version numbers, names etc. for this plugin
 #include "version.h"
