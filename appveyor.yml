@@ -72,7 +72,7 @@ for:
 
     # install dependencies:
     - choco install poedit
-    - choco install git
+    - choco install git --version=2.43.0
     - choco install wget
 
     # Download and unzip wxwidgets
