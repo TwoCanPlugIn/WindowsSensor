@@ -20,6 +20,8 @@
 #ifndef WINDOWS_SENSOR_PLUGIN_H
 #define WINDOWS_SENSOR_PLUGIN_H
 
+#include "sensor_plugin_settings.h"
+
 // Windows COM and Sensor API
 #define _WINSOCKAPI_
 #include <comutil.h>
@@ -44,6 +46,19 @@
 // OpenCPN include file
 #include "ocpn_plugin.h"
 
+// Global Variables (accessed by settings dialog)
+// Debug output
+bool isVerbose;
+
+// NMEA 0183 Sentence Options
+bool isGGA;
+bool isGLL;
+bool isGSV;
+bool isRMC;
+
+// The PC's GPS Sensor Name
+wxString sensorName;
+
 // The Windows Sensor plugin
 class Windows_Sensor_Plugin : public opencpn_plugin_116, wxTimer {
 
@@ -65,6 +80,7 @@ public:
 	wxString GetShortDescription();
 	wxString GetLongDescription();
 	wxBitmap *GetPlugInBitmap();
+	void ShowPreferencesDialog(wxWindow* parent);
 		
 private: 
 	
@@ -84,6 +100,10 @@ private:
 	bool InitializeSensor(void);
 	bool GetData(void);
 
+	// Windows Sensor COM interfaces
+	ISensorManager *sensorManager;
+	ISensor *sensor;
+
 	// The GPS variables
 	double latitude;
 	double longitude;
@@ -91,24 +111,39 @@ private:
 	double courseOverGround;
 	double trueHeading;
 	double magneticHeading;
+	double magneticVariation;
 	double altitude;
 	double hDOP;
 	double geoidalSeparation;
 	double dgpsAge;
 	int dgpsReferenceId;
+	int satellitesUsed;
 	int numberOfSatellites;
 	int fixType;
 	int fixQuality;
-
-	// Windows Sensor COM interfaces
-	ISensorManager *sensorManager;
-	ISensor *sensor;
+	int fixMode;
+	int fixStatus;
 
 	// If sensor has been initialized
 	bool isRunning;
+	
+	// Preferences Dialog
+	Windows_Sensor_Plugin_Settings *settingsDialog;
 
-	// Debug output
-	bool isVerbose;
+	std::vector<char>GpsSelectionMode = {'A', 'D', 'E', 'M','S', 'N' };
+	// SENSOR_DATA_TYPE_GPS_SELECTION_MODE
+	// 0 = Autonomous.
+	// 1 = DGPS.
+	// 2 = Estimated(dead reckoned).
+	// 3 = Manual input.
+	// 4 = Simulator.
+	// 5 = Data not valid.
+
+	// Matches NMEA 0183
+	// A = Autonomous mode
+	// D = Differential mode
+	// E = Estimated(dead reckoning) mode
+	// M = Manual input mode	// S = Simulator mode	// N = Data not valid
 	
 };
 

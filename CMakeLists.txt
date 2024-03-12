@@ -124,9 +124,13 @@ INCLUDE_DIRECTORIES(BEFORE ${PROJECT_SOURCE_DIR}/libs/ocpn-api)
 INCLUDE_DIRECTORIES(${CMAKE_SOURCE_DIR}/inc)
 
 SET(SOURCE src/sensor_plugin.cpp
+		   src/sensor_plugin_settings.cpp
+		   src/sensor_plugin_settings_base.cpp
            src/sensor_plugin_icons.cpp)
 
 SET(INCLUDE inc/sensor_plugin.h
+			inc/sensor_plugin_settings.h
+		    inc/sensor_plugin_settings_base.h
             inc/sensor_plugin_icons.h)
 
 TARGET_SOURCES(${PACKAGE_NAME} PUBLIC ${SOURCE})

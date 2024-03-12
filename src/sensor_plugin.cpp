@@ -25,6 +25,7 @@
 // Version History: 
 // 1.0 Initial Release
 // 1.0.1 23/02/2024 Enable/Disable Debug logging, Fix GGA sentence when FixType not DGPS
+// 1.1.0 01/03/2024 Generate different NMEA 0183 Sentences
 
 // Note to self
 // Good reference: https://docs.microsoft.com/en-us/windows/win32/sensorsapi/portal
@@ -64,12 +65,16 @@ int Windows_Sensor_Plugin::Init(void) {
 	parentWindow = GetOCPNCanvasWindow();
 
 	// Maintain a reference to the OpenCPN configuration object 
-	// Users need to manually add this section to enable debug logging of NMEA sentences
+	// Determine what NMEA 183 sentences to generate
 	configSettings = GetOCPNConfigObject();
 
 	if (configSettings) {
 		configSettings->SetPath(_T("/PlugIns/WindowsSensor"));
 		configSettings->Read(_T("Verbose"), &isVerbose, 0);
+		configSettings->Read(_T("GLL"), &isGLL, 1);
+		configSettings->Read(_T("GGA"), &isGGA, 2);
+		configSettings->Read(_T("GSV"), &isGSV, 3);
+		configSettings->Read(_T("RMC"), &isRMC, 4);
 	}
 
 	// Initialize the Windows Sensor
@@ -81,7 +86,7 @@ int Windows_Sensor_Plugin::Init(void) {
 	}
 
 	// Notify OpenCPN what events we want to receive callbacks for
-	return (WANTS_CONFIG);
+	return (WANTS_CONFIG | WANTS_PREFERENCES);
 }
 
 // OpenCPN is either closing down, or we have been disabled from the Preferences Dialog
@@ -132,6 +137,25 @@ wxString Windows_Sensor_Plugin::GetLongDescription() {
 // 32x32 pixel PNG file, use pgn2wx.pl perl script
 wxBitmap* Windows_Sensor_Plugin::GetPlugInBitmap() {
 		return windowsSensorLogo;
+}
+
+void Windows_Sensor_Plugin::ShowPreferencesDialog(wxWindow* parent) {
+
+	settingsDialog = new Windows_Sensor_Plugin_Settings(parent);
+
+	if (settingsDialog->ShowModal() == wxID_OK) {
+		if (configSettings) {
+			configSettings->SetPath(_T("/PlugIns/WindowsSensor"));
+			configSettings->Write(_T("Verbose"), isVerbose);
+			configSettings->Write(_T("GLL"), isGLL);
+			configSettings->Write(_T("GGA"), isGGA);
+			configSettings->Write(_T("GSV"), isGSV);
+			configSettings->Write(_T("RMC"), isRMC);
+		}
+	}
+		
+	delete settingsDialog;
+	settingsDialog = nullptr;
 }
 
 bool Windows_Sensor_Plugin::InitializeSensor() {
@@ -195,7 +219,7 @@ bool Windows_Sensor_Plugin::InitializeSensor() {
 		}
 
 		// Convert the BSTR to a wxString
-		wxString sensorName = wxString::FromUTF8(_bstr_t(name));
+		sensorName = wxString::FromUTF8(_bstr_t(name));
 		wxLogMessage(_T("Windows Sensor Plugin, GPS Sensor: %i, Name %s"), i, sensorName);
 
 		// Not really necessary, but useful for debugging purposes
@@ -306,7 +330,6 @@ bool Windows_Sensor_Plugin::GetData(void) {
 			longitude = sensorDataValue.dblVal;
 		}
 		
-
 		else if (sensorDataKey == SENSOR_DATA_TYPE_ALTITUDE_ANTENNA_SEALEVEL_METERS) {
 			altitude = sensorDataValue.dblVal;
 		}
@@ -314,7 +337,11 @@ bool Windows_Sensor_Plugin::GetData(void) {
 		else if (sensorDataKey == SENSOR_DATA_TYPE_SPEED_KNOTS)	{
 			speedOverGround = sensorDataValue.dblVal;
 		}
-		
+
+		else if (sensorDataKey == SENSOR_DATA_TYPE_SATELLITES_USED_COUNT) {
+			satellitesUsed = sensorDataValue.intVal;
+		}
+
 		else if (sensorDataKey == SENSOR_DATA_TYPE_HORIZONAL_DILUTION_OF_PRECISION)	{
 			hDOP = sensorDataValue.dblVal;
 		}
@@ -339,8 +366,30 @@ bool Windows_Sensor_Plugin::GetData(void) {
 			trueHeading = sensorDataValue.dblVal;
 		}
 
+		else if (sensorDataKey == SENSOR_DATA_TYPE_MAGNETIC_VARIATION) {
+			magneticVariation = sensorDataValue.dblVal;
+		}
+
 		else if (sensorDataKey == SENSOR_DATA_TYPE_SATELLITES_USED_COUNT) {
 			numberOfSatellites = sensorDataValue.intVal;
+		}
+
+		// The following are vector types
+		// Refer to https://learn.microsoft.com/en-us/windows/win32/sensorsapi/retrieving-vector-types
+		else if (sensorDataKey == SENSOR_DATA_TYPE_SATELLITES_IN_VIEW_AZIMUTH) {
+
+		}
+
+		else if (sensorDataKey == SENSOR_DATA_TYPE_SATELLITES_IN_VIEW_ELEVATION) {
+
+		}
+
+		else if (sensorDataKey == SENSOR_DATA_TYPE_SATELLITES_IN_VIEW_STN_RATIO) {
+
+		}
+
+		else if (sensorDataKey == SENSOR_DATA_TYPE_SATELLITES_IN_VIEW_ID) {
+
 		}
 
 		else if (sensorDataKey == SENSOR_DATA_TYPE_FIX_TYPE) {
@@ -349,6 +398,14 @@ bool Windows_Sensor_Plugin::GetData(void) {
 		
 		else if (sensorDataKey == SENSOR_DATA_TYPE_FIX_QUALITY) {
 			fixQuality = sensorDataValue.intVal;
+		}
+
+		else if (sensorDataKey == SENSOR_DATA_TYPE_GPS_SELECTION_MODE) {
+			fixMode = sensorDataValue.intVal;
+		}
+
+		else if (sensorDataKey == SENSOR_DATA_TYPE_GPS_STATUS) {
+			fixStatus = sensorDataValue.intVal;
 		}
 
 		else if (sensorDataKey == SENSOR_DATA_TYPE_NMEA_SENTENCE) {
@@ -371,7 +428,7 @@ bool Windows_Sensor_Plugin::GetData(void) {
 //                                             | sats
 //                                           fix Qualty
 
-// BUG BUG we could just use the sentence provided by the sensor !!
+// Generate the required NMEA 0183 sentences
 void Windows_Sensor_Plugin::Notify() {
 	if (GetData()) {
 
@@ -383,36 +440,116 @@ void Windows_Sensor_Plugin::Notify() {
 
 		wxDateTime tm = wxDateTime::Now();
 
-		// Generate the GGA sentence
-		wxString sentence;
-		// Differential GPS has differential GPS Age and Reference Station Id values
-		if (fixType == 2) {
-			sentence = wxString::Format("$IIGGA,%s,%02.0f%07.4f,%c,%03.0f%07.4f,%c,%d,%d,%.2f,%.1f,M,%.1f,M,%.1f,%d", \
-			tm.Format("%H%M%S").ToAscii(), fabs(latitudeDegrees), fabs(latitudeMinutes), latitudeDegrees >= 0 ? 'N' : 'S', \
-			fabs(longitudeDegrees), fabs(longitudeMinutes), longitudeDegrees >= 0 ? 'E' : 'W', \
-			fixType, numberOfSatellites, (double)hDOP , (double)altitude, \
-			(double)geoidalSeparation, dgpsAge, dgpsReferenceId);
+		if (isGGA) {
+			// $--GGA,hhmmss.ss,llll.ll,a,yyyyy.yy,a,x,xx,x.x,x.x,M,x.x,M,x.x,xxxx*hh<CR><LF>
+			wxString sentence;
+			// Differential GPS has differential GPS Age and Reference Station Id values
+			if (fixType == 2) {
+				sentence = wxString::Format("$IIGGA,%s,%02.0f%07.4f,%c,%03.0f%07.4f,%c,%d,%d,%.2f,%.1f,M,%.1f,M,%.1f,%d", \
+					tm.Format("%H%M%S").ToAscii(), fabs(latitudeDegrees), fabs(latitudeMinutes), latitudeDegrees >= 0 ? 'N' : 'S', \
+					fabs(longitudeDegrees), fabs(longitudeMinutes), longitudeDegrees >= 0 ? 'E' : 'W', \
+					fixType, satellitesUsed, (double)hDOP, (double)altitude, \
+					(double)geoidalSeparation, dgpsAge, dgpsReferenceId);
+			}
+			// Other Fix Types differential GPS Age and Reference Station Id values are NULL
+			// BUG BUG Fix Type = 0 means no fix !
+			else {
+				sentence = wxString::Format("$IIGGA,%s,%02.0f%07.4f,%c,%03.0f%07.4f,%c,%d,%d,%.2f,%.1f,M,%.1f,M,,", \
+					tm.Format("%H%M%S").ToAscii(), fabs(latitudeDegrees), fabs(latitudeMinutes), latitudeDegrees >= 0 ? 'N' : 'S', \
+					fabs(longitudeDegrees), fabs(longitudeMinutes), longitudeDegrees >= 0 ? 'E' : 'W', \
+					fixType, satellitesUsed, (double)hDOP, (double)altitude, \
+					(double)geoidalSeparation);
+			}
+
+			// Calculate & append checksum
+			sentence.Trim();
+			wxString checksum = ComputeChecksum(sentence);
+			sentence.Append(wxT("*"));
+			sentence.Append(checksum);
+			sentence.Append(wxT("\r\n"));
+			// Send to OpenCPN
+			PushNMEABuffer(sentence);
+			if (isVerbose) {
+				wxLogMessage(_T("Windows Sensor Plugin, Generated sentence: %s"), sentence);
+			}
 		}
-		// Other Fix Types differential GPS Age and Reference Station Id values are NULL
-		// BUG BUG Fix Type = 0 means no fix !
-		else {
-			sentence = wxString::Format("$IIGGA,%s,%02.0f%07.4f,%c,%03.0f%07.4f,%c,%d,%d,%.2f,%.1f,M,%.1f,M,,", \
-			tm.Format("%H%M%S").ToAscii(), fabs(latitudeDegrees), fabs(latitudeMinutes), latitudeDegrees >= 0 ? 'N' : 'S', \
-			fabs(longitudeDegrees), fabs(longitudeMinutes), longitudeDegrees >= 0 ? 'E' : 'W', \
-			fixType, numberOfSatellites, (double)hDOP , (double)altitude, \
-			(double)geoidalSeparation);
+		if (isGLL) {
+			// $--GLL, llll.ll, a, yyyyy.yy, a, hhmmss.ss, A, a*hh<CR><LF>
+			wxString sentence;
+
+			sentence = wxString::Format("$IIGLL,%02d%07.4f,%c,%03d%07.4f,%c,%s,%c,%c", abs(latitudeDegrees), fabs(latitudeMinutes), latitude >= 0 ? 'N' : 'S', \
+				abs(longitudeDegrees), fabs(longitudeMinutes), longitude >= 0 ? 'E' : 'W', tm.Format("%H%M%S.00", wxDateTime::UTC).ToAscii(), 
+				fixStatus == 1 ? 'A' : 'V', GpsSelectionMode.at(fixMode));
+			
+			// Calculate & append checksum
+			sentence.Trim();
+			wxString checksum = ComputeChecksum(sentence);
+			sentence.Append(wxT("*"));
+			sentence.Append(checksum);
+			sentence.Append(wxT("\r\n"));
+			// Send to OpenCPN
+			PushNMEABuffer(sentence);
+			if (isVerbose) {
+				wxLogMessage(_T("Windows Sensor Plugin, Generated sentence: %s"), sentence);
+			}
+		}
+		if (isGSV) {
+			// $--GSV,x,x,x,x,x,x,x,...*hh<CR><LF>
+			//        | | | | | | snr
+			//        | | | | | azimuth
+			//        | | | | elevation
+			//        | | | satellite id
+			//    total | satellites in view
+			//          sentence number
+			wxString sentence;
+			int totalSentences;
+			totalSentences = trunc(numberOfSatellites / 4) + ((numberOfSatellites % 4) == 0 ? 0 : 1);
+			int sentenceNumber;
+			sentenceNumber = 1;
+
+			for (int i = 0; i < numberOfSatellites; i++) {
+				// BUG BUG Extract the values from the vector
+				if ((((i + 1) % 4) == 0) || (((((i + 1) % 4) != 0)) && (i == (numberOfSatellites - 1)))) {
+					sentence.Prepend(wxString::Format("$GPGSV,%d,%d,%d", totalSentences, sentenceNumber, numberOfSatellites));
+					// Calculate checksum
+					sentence.Trim();
+					wxString checksum = ComputeChecksum(sentence);
+					sentence.Append(wxT("*"));
+					sentence.Append(checksum);
+					sentence.Append(wxT("\r\n"));
+					// Send to OpenCPN
+					//PushNMEABuffer(sentence);
+					//if (isVerbose) {
+					//	wxLogMessage(_T("Windows Sensor Plugin, Generated sentence: %s"), sentence);
+					//}
+					sentence.Empty();
+					sentenceNumber++;
+				}
+			}
 		}
 
-		// Calculate & append checksum
-		sentence.Trim();
-		wxString checksum = ComputeChecksum(sentence);
-		sentence.Append(wxT("*"));
-		sentence.Append(checksum);
-		sentence.Append(wxT("\r\n"));
-		// Send to OpenCPN
-		PushNMEABuffer(sentence);
-		if (isVerbose) {
-			wxLogMessage(_T("Windows Sensor Plugin, Generated sentence: %s"), sentence);
+		if (isRMC) {
+			// $--RMC,hhmmss.ss,A,llll.ll,a,yyyyy.yy,a,x.x,x.x,xxxxxx,x.x,a,a*hh<CR><LF>
+			wxString sentence;
+
+			sentence = wxString::Format("$IIRMC,%s,%c,%02.0f%07.4f,%c,%03.0f%07.4f,%c,%.2f,%.2f,%s,%.2f,%c,%c,", \
+				tm.Format("%H%M%S").ToAscii(), fixStatus == 1 ? 'A' : 'V', fabs(latitudeDegrees), fabs(latitudeMinutes), latitudeDegrees >= 0 ? 'N' : 'S', \
+				fabs(longitudeDegrees), fabs(longitudeMinutes), longitudeDegrees >= 0 ? 'E' : 'W', \
+				speedOverGround , trueHeading, tm.Format("%d%m%y").ToAscii(), \
+				fabs(magneticVariation),  magneticVariation >= 0 ? 'E' : 'W', GpsSelectionMode.at(fixMode));
+
+
+			// Calculate & append checksum
+			sentence.Trim();
+			wxString checksum = ComputeChecksum(sentence);
+			sentence.Append(wxT("*"));
+			sentence.Append(checksum);
+			sentence.Append(wxT("\r\n"));
+			// Send to OpenCPN
+			PushNMEABuffer(sentence);
+			if (isVerbose) {
+				wxLogMessage(_T("Windows Sensor Plugin, Generated sentence: %s"), sentence);
+			}
 		}
 	}
 }
