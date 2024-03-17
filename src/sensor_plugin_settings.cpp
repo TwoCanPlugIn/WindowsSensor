@@ -41,7 +41,7 @@ Windows_Sensor_Plugin_Settings::Windows_Sensor_Plugin_Settings(wxWindow* parent)
 	Fit();
 
 	// Populate the values of the dialog
-	lblSensor->SetLabel(wxString::Format("GPS Sensor: %s", sensorName));
+	lblSensor->SetLabel(wxString::Format("%s", sensorName));
 	// Note the order of the check list box elements
 	// GGA
 	chkListSentence->Check(0, isGGA);

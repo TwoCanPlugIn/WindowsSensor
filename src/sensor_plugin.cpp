@@ -316,7 +316,7 @@ bool Windows_Sensor_Plugin::GetData(void) {
 
 		// Get the value
 		PROPVARIANT sensorDataValue;
-		PropVariantInit(&sensorDataValue);
+		//PropVariantInit(&sensorDataValue);
 		sensorData->GetSensorValue(sensorDataKey, &sensorDataValue);
 
 		if (sensorDataKey == SENSOR_DATA_TYPE_LATITUDE_DEGREES) {
@@ -452,7 +452,7 @@ bool Windows_Sensor_Plugin::GetData(void) {
 			}
 		}
 
-		PropVariantClear(&sensorDataValue);
+		//PropVariantClear(&sensorDataValue);
 	}
 	keyList->Release();
 	return true;
