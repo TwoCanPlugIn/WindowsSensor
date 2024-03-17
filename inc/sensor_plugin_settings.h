@@ -20,7 +20,6 @@ extern bool isGSV;
 extern bool isRMC;
 extern wxString sensorName;
 
-
 class Windows_Sensor_Plugin_Settings : public Windows_Sensor_Plugin_Settings_Base {
 	
 public:

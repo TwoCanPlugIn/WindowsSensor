@@ -59,6 +59,14 @@ bool isRMC;
 // The PC's GPS Sensor Name
 wxString sensorName;
 
+// Structure for aggregating satellites used for position fix
+typedef struct _satellite_info {
+	unsigned int id;
+	double elevation;
+	double azimuth;
+	double snr;
+} SatelliteInformation;
+
 // The Windows Sensor plugin
 class Windows_Sensor_Plugin : public opencpn_plugin_116, wxTimer {
 
@@ -93,12 +101,16 @@ private:
 	// Overridden wxTimer method, used to fetch position from sensor
 	void Notify();
 
+	// OpenCPN Configuration Setings
+	wxFileConfig *configSettings;
+
 	// NMEA 0183 Checksum
 	wxString ComputeChecksum(wxString sentence);
 
 	// Uses Windows Sensor API to find, initialize and fetch data from a location sensor
 	bool InitializeSensor(void);
 	bool GetData(void);
+	void GetSatelliteInfo(const PROPERTYKEY key, std::vector<SatelliteInformation> &sats);
 
 	// Windows Sensor COM interfaces
 	ISensorManager *sensorManager;
@@ -114,15 +126,19 @@ private:
 	double magneticVariation;
 	double altitude;
 	double hDOP;
+	double pDOP;
+	double vDOP;
 	double geoidalSeparation;
 	double dgpsAge;
-	int dgpsReferenceId;
-	int satellitesUsed;
-	int numberOfSatellites;
-	int fixType;
-	int fixQuality;
-	int fixMode;
-	int fixStatus;
+	unsigned int dgpsReferenceId;
+	unsigned int satellitesInView;
+	unsigned int satellitesInUse;
+	std::vector<SatelliteInformation> satellites;
+	unsigned int fixType;
+	unsigned int fixQuality;
+	unsigned int selectionMode;
+	unsigned int operationMode;
+	unsigned int fixStatus;
 
 	// If sensor has been initialized
 	bool isRunning;

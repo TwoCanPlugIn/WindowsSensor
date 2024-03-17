@@ -37,11 +37,6 @@
 #include "sensor_plugin.h"
 #include "sensor_plugin_icons.h"
 
-// Globally accessible variables used by the plugin
-
-// OpenCPN Configuration Setings
-wxFileConfig *configSettings;
-
 // The class factories, used to create and destroy instances of the PlugIn
 extern "C" DECL_EXP opencpn_plugin* create_pi(void *ppimgr) {
 	return new Windows_Sensor_Plugin(ppimgr);
@@ -65,16 +60,16 @@ int Windows_Sensor_Plugin::Init(void) {
 	parentWindow = GetOCPNCanvasWindow();
 
 	// Maintain a reference to the OpenCPN configuration object 
-	// Determine what NMEA 183 sentences to generate
+	// Settings determine what NMEA 183 sentences to generate
 	configSettings = GetOCPNConfigObject();
 
 	if (configSettings) {
 		configSettings->SetPath(_T("/PlugIns/WindowsSensor"));
 		configSettings->Read(_T("Verbose"), &isVerbose, 0);
 		configSettings->Read(_T("GLL"), &isGLL, 1);
-		configSettings->Read(_T("GGA"), &isGGA, 2);
-		configSettings->Read(_T("GSV"), &isGSV, 3);
-		configSettings->Read(_T("RMC"), &isRMC, 4);
+		configSettings->Read(_T("GGA"), &isGGA, 1);
+		configSettings->Read(_T("GSV"), &isGSV, 1);
+		configSettings->Read(_T("RMC"), &isRMC, 1);
 	}
 
 	// Initialize the Windows Sensor
@@ -144,6 +139,7 @@ void Windows_Sensor_Plugin::ShowPreferencesDialog(wxWindow* parent) {
 	settingsDialog = new Windows_Sensor_Plugin_Settings(parent);
 
 	if (settingsDialog->ShowModal() == wxID_OK) {
+		// Save the settings
 		if (configSettings) {
 			configSettings->SetPath(_T("/PlugIns/WindowsSensor"));
 			configSettings->Write(_T("Verbose"), isVerbose);
@@ -203,7 +199,7 @@ bool Windows_Sensor_Plugin::InitializeSensor() {
 
 	wxLogMessage(_T("Windows Sensor Plugin, Found %i GPS sensor(s)"), sensorsCount);
 
-	// Iterate through the sensors, althouh we really just use the last one returned
+	// Iterate through the sensors, although we really just use the last one returned
 	for (unsigned int i = 0; i < sensorsCount; i++) {
 		sensor = NULL;
 
@@ -301,15 +297,15 @@ bool Windows_Sensor_Plugin::GetData(void) {
 		return false;
 	}
 
-	ULONG keysCount = 0;
-	keyList->GetCount(&keysCount);
+	ULONG keyCount = 0;
+	keyList->GetCount(&keyCount);
 	
-	if ((hr != S_OK) || (keysCount == 0)) {
+	if ((hr != S_OK) || (keyCount == 0)) {
 		wxLogMessage(_T("Windows Sensor Plugin, No data values."));
 		return false;
 	}
 
-	for (unsigned int i = 0; i < keysCount; i++) {
+	for (unsigned int i = 0; i < keyCount; i++) {
 		PROPERTYKEY sensorDataKey;
 		keyList->GetAt(i, &sensorDataKey);
 
@@ -320,6 +316,7 @@ bool Windows_Sensor_Plugin::GetData(void) {
 
 		// Get the value
 		PROPVARIANT sensorDataValue;
+		PropVariantInit(&sensorDataValue);
 		sensorData->GetSensorValue(sensorDataKey, &sensorDataValue);
 
 		if (sensorDataKey == SENSOR_DATA_TYPE_LATITUDE_DEGREES) {
@@ -339,11 +336,19 @@ bool Windows_Sensor_Plugin::GetData(void) {
 		}
 
 		else if (sensorDataKey == SENSOR_DATA_TYPE_SATELLITES_USED_COUNT) {
-			satellitesUsed = sensorDataValue.intVal;
+			satellitesInUse = sensorDataValue.intVal;
 		}
 
 		else if (sensorDataKey == SENSOR_DATA_TYPE_HORIZONAL_DILUTION_OF_PRECISION)	{
 			hDOP = sensorDataValue.dblVal;
+		}
+
+		else if (sensorDataKey == SENSOR_DATA_TYPE_VERTICAL_DILUTION_OF_PRECISION) {
+			vDOP = sensorDataValue.dblVal;
+		}
+
+		else if (sensorDataKey == SENSOR_DATA_TYPE_POSITION_DILUTION_OF_PRECISION) {
+			pDOP = sensorDataValue.dblVal;
 		}
 
 		else if (sensorDataKey == SENSOR_DATA_TYPE_GEOIDAL_SEPARATION) {
@@ -358,56 +363,44 @@ bool Windows_Sensor_Plugin::GetData(void) {
 			dgpsReferenceId = sensorDataValue.intVal;
 		}
 		
-		else if (sensorDataKey == SENSOR_DATA_TYPE_MAGNETIC_HEADING_DEGREES) {
-			magneticHeading = sensorDataValue.dblVal;
-		}
-
 		else if (sensorDataKey == SENSOR_DATA_TYPE_TRUE_HEADING_DEGREES) {
 			trueHeading = sensorDataValue.dblVal;
+		}
+
+		else if (sensorDataKey == SENSOR_DATA_TYPE_MAGNETIC_HEADING_DEGREES) {
+			magneticHeading = sensorDataValue.dblVal;
 		}
 
 		else if (sensorDataKey == SENSOR_DATA_TYPE_MAGNETIC_VARIATION) {
 			magneticVariation = sensorDataValue.dblVal;
 		}
 
-		else if (sensorDataKey == SENSOR_DATA_TYPE_SATELLITES_USED_COUNT) {
-			numberOfSatellites = sensorDataValue.intVal;
-		}
-
-		// The following are vector types
-		// Refer to https://learn.microsoft.com/en-us/windows/win32/sensorsapi/retrieving-vector-types
-		else if (sensorDataKey == SENSOR_DATA_TYPE_SATELLITES_IN_VIEW_AZIMUTH) {
-
-		}
-
-		else if (sensorDataKey == SENSOR_DATA_TYPE_SATELLITES_IN_VIEW_ELEVATION) {
-
-		}
-
-		else if (sensorDataKey == SENSOR_DATA_TYPE_SATELLITES_IN_VIEW_STN_RATIO) {
-
-		}
-
-		else if (sensorDataKey == SENSOR_DATA_TYPE_SATELLITES_IN_VIEW_ID) {
-
+		else if (sensorDataKey == SENSOR_DATA_TYPE_SATELLITES_IN_VIEW) {
+			satellitesInView = sensorDataValue.intVal;
 		}
 
 		else if (sensorDataKey == SENSOR_DATA_TYPE_FIX_TYPE) {
 			fixType = sensorDataValue.intVal;
 		}
-		
+
 		else if (sensorDataKey == SENSOR_DATA_TYPE_FIX_QUALITY) {
 			fixQuality = sensorDataValue.intVal;
 		}
 
 		else if (sensorDataKey == SENSOR_DATA_TYPE_GPS_SELECTION_MODE) {
-			fixMode = sensorDataValue.intVal;
+			selectionMode = sensorDataValue.intVal;
+		}
+
+		else if (sensorDataKey == SENSOR_DATA_TYPE_GPS_OPERATION_MODE) {
+			operationMode = sensorDataValue.intVal;
 		}
 
 		else if (sensorDataKey == SENSOR_DATA_TYPE_GPS_STATUS) {
 			fixStatus = sensorDataValue.intVal;
 		}
 
+		// This seems only to be filled in if the sensor consumes NMEA 0183 sentence
+		// It also appears to be the last sentence received, so not of any real use
 		else if (sensorDataKey == SENSOR_DATA_TYPE_NMEA_SENTENCE) {
 			BSTR sentence = sensorDataValue.bstrVal;
 			wxString nmeaSentence = wxString::FromUTF8(_bstr_t(sentence));
@@ -416,10 +409,112 @@ bool Windows_Sensor_Plugin::GetData(void) {
 			}
 		}
 
+		// The following are vector types
+		// Refer to https://learn.microsoft.com/en-us/windows/win32/sensorsapi/retrieving-vector-types
+		
+		else if (sensorDataKey == SENSOR_DATA_TYPE_SATELLITES_IN_VIEW_AZIMUTH) {
+			if ((VT_UI1 | VT_VECTOR) == V_VT(&sensorDataValue)) {
+				double *dblValue = (double *)sensorDataValue.caub.pElems;
+				for (unsigned int j = 0; j < satellitesInView; j++) {
+					satellites.at(j).azimuth = *dblValue;
+					dblValue++;
+				}
+			}
+		}
+
+		else if (sensorDataKey == SENSOR_DATA_TYPE_SATELLITES_IN_VIEW_ELEVATION) {
+			if ((VT_UI1 | VT_VECTOR) == V_VT(&sensorDataValue)) {
+				double *dblValue = (double *)sensorDataValue.caub.pElems;
+				for (unsigned int j = 0; j < satellitesInView; j++) {
+					satellites.at(j).elevation = *dblValue;
+					dblValue++;
+				}
+			}
+		}
+
+		else if (sensorDataKey == SENSOR_DATA_TYPE_SATELLITES_IN_VIEW_STN_RATIO) {
+			if ((VT_UI1 | VT_VECTOR) == V_VT(&sensorDataValue)) {
+				double *dblValue = (double *)sensorDataValue.caub.pElems;
+				for (unsigned int j = 0; j < satellitesInView; j++) {
+					satellites.at(j).snr = *dblValue;
+					dblValue++;
+				}
+			}
+		}
+
+		else if (sensorDataKey == SENSOR_DATA_TYPE_SATELLITES_IN_VIEW_ID) {
+			if ((VT_UI1 | VT_VECTOR) == V_VT(&sensorDataValue)) {
+				int *intValue = (int *)sensorDataValue.caub.pElems;
+				for (unsigned int j = 0; j < satellitesInView; j++) {
+					satellites.at(j).id = *intValue;
+					intValue++;
+				}
+			}
+		}
+
+		PropVariantClear(&sensorDataValue);
 	}
 	keyList->Release();
 	return true;
 }
+
+// Obtain each satellite's id, azimuth, elevation, signal to noise ratio etc.
+// Used to generate NMEA 0183 GSV sentences
+void Windows_Sensor_Plugin::GetSatelliteInfo(const PROPERTYKEY key, std::vector<SatelliteInformation> &sats) {
+	PROPVARIANT propertyValue;
+	PropVariantInit(&propertyValue);
+	ISensorDataReport *sensorData = NULL;
+	HRESULT hr;
+	hr = sensor->GetData(&sensorData);
+	if (FAILED(hr) || !sensorData) {
+		wprintf(L"Failed to get location sensor data\n");
+		return;
+	}
+	hr = sensorData->GetSensorValue(key, &propertyValue);
+	if (SUCCEEDED(hr)) {
+		if ((VT_UI1 | VT_VECTOR) == V_VT(&propertyValue)) {
+
+			// double variable to store SNR, Elevation, Azimuth
+			double *element = (double *)propertyValue.caub.pElems;
+			// integer variable to store Id
+			unsigned int *id = (unsigned int *)propertyValue.caub.pElems;
+
+			for (unsigned int i = 0; i < satellitesInView; i++) {
+				if (IsEqualPropertyKey(key, SENSOR_DATA_TYPE_SATELLITES_IN_VIEW_ID)) {
+					sats.at(i).id = (unsigned int)*id;
+					if (isVerbose) {
+						wxLogMessage(_T("Windows Sensor Plugin, Satellite Id (%d): %d"), i, *id);
+					}
+				}
+				if (IsEqualPropertyKey(key, SENSOR_DATA_TYPE_SATELLITES_IN_VIEW_AZIMUTH)) {
+					sats.at(i).azimuth = (int)*element;
+					if (isVerbose) {
+						wxLogMessage(_T("Windows Sensor Plugin, Satellite Azimuth (%d): %f"), i, *element);
+					}
+				}
+				else if (IsEqualPropertyKey(key, SENSOR_DATA_TYPE_SATELLITES_IN_VIEW_ELEVATION)) {
+					sats.at(i).elevation = (int)*element;
+					if (isVerbose) {
+						wxLogMessage(_T("Windows Sensor Plugin, Satellite Elevation (%d): %f"), i, *element);
+					}
+				}
+				else if (IsEqualPropertyKey(key, SENSOR_DATA_TYPE_SATELLITES_IN_VIEW_STN_RATIO)) {
+					sats.at(i).snr = (int)*element;
+					if (isVerbose) {
+						wxLogMessage(_T("Windows Sensor Plugin, Satellite SNR (%d): %f"), i, *element);
+					}
+				}
+				element++;
+				id++;
+			}
+		}
+	}
+	else {
+		wprintf(L"Failed to get property value\n");
+	}
+	PropVariantClear(&propertyValue);
+}
+
 
 
 // $--GGA, hhmmss.ss, llll.ll, a, yyyyy.yy, a, x, xx, x.x, x.x, M, x.x, M, x.x, xxxx*hh<CR><LF>
@@ -443,12 +538,13 @@ void Windows_Sensor_Plugin::Notify() {
 		if (isGGA) {
 			// $--GGA,hhmmss.ss,llll.ll,a,yyyyy.yy,a,x,xx,x.x,x.x,M,x.x,M,x.x,xxxx*hh<CR><LF>
 			wxString sentence;
+			
 			// Differential GPS has differential GPS Age and Reference Station Id values
 			if (fixType == 2) {
 				sentence = wxString::Format("$IIGGA,%s,%02.0f%07.4f,%c,%03.0f%07.4f,%c,%d,%d,%.2f,%.1f,M,%.1f,M,%.1f,%d", \
 					tm.Format("%H%M%S").ToAscii(), fabs(latitudeDegrees), fabs(latitudeMinutes), latitudeDegrees >= 0 ? 'N' : 'S', \
 					fabs(longitudeDegrees), fabs(longitudeMinutes), longitudeDegrees >= 0 ? 'E' : 'W', \
-					fixType, satellitesUsed, (double)hDOP, (double)altitude, \
+					fixType, satellitesInView, (double)hDOP, (double)altitude, \
 					(double)geoidalSeparation, dgpsAge, dgpsReferenceId);
 			}
 			// Other Fix Types differential GPS Age and Reference Station Id values are NULL
@@ -457,7 +553,7 @@ void Windows_Sensor_Plugin::Notify() {
 				sentence = wxString::Format("$IIGGA,%s,%02.0f%07.4f,%c,%03.0f%07.4f,%c,%d,%d,%.2f,%.1f,M,%.1f,M,,", \
 					tm.Format("%H%M%S").ToAscii(), fabs(latitudeDegrees), fabs(latitudeMinutes), latitudeDegrees >= 0 ? 'N' : 'S', \
 					fabs(longitudeDegrees), fabs(longitudeMinutes), longitudeDegrees >= 0 ? 'E' : 'W', \
-					fixType, satellitesUsed, (double)hDOP, (double)altitude, \
+					fixType, satellitesInView, (double)hDOP, (double)altitude, \
 					(double)geoidalSeparation);
 			}
 
@@ -474,12 +570,12 @@ void Windows_Sensor_Plugin::Notify() {
 			}
 		}
 		if (isGLL) {
-			// $--GLL, llll.ll, a, yyyyy.yy, a, hhmmss.ss, A, a*hh<CR><LF>
+			// $--GLL,llll.ll,a,yyyyy.yy,a,hhmmss.ss,A,a*hh<CR><LF>
 			wxString sentence;
 
 			sentence = wxString::Format("$IIGLL,%02d%07.4f,%c,%03d%07.4f,%c,%s,%c,%c", abs(latitudeDegrees), fabs(latitudeMinutes), latitude >= 0 ? 'N' : 'S', \
 				abs(longitudeDegrees), fabs(longitudeMinutes), longitude >= 0 ? 'E' : 'W', tm.Format("%H%M%S.00", wxDateTime::UTC).ToAscii(), 
-				fixStatus == 1 ? 'A' : 'V', GpsSelectionMode.at(fixMode));
+				fixStatus == 1 ? 'A' : 'V', GpsSelectionMode.at(selectionMode));
 			
 			// Calculate & append checksum
 			sentence.Trim();
@@ -495,22 +591,24 @@ void Windows_Sensor_Plugin::Notify() {
 		}
 		if (isGSV) {
 			// $--GSV,x,x,x,x,x,x,x,...*hh<CR><LF>
+			//        | | | | | | |
 			//        | | | | | | snr
 			//        | | | | | azimuth
 			//        | | | | elevation
 			//        | | | satellite id
-			//    total | satellites in view
+			// sentences| satellites in view
 			//          sentence number
 			wxString sentence;
 			int totalSentences;
-			totalSentences = trunc(numberOfSatellites / 4) + ((numberOfSatellites % 4) == 0 ? 0 : 1);
+			totalSentences = trunc(satellitesInUse / 4) + ((satellitesInUse % 4) == 0 ? 0 : 1);
 			int sentenceNumber;
 			sentenceNumber = 1;
 
-			for (int i = 0; i < numberOfSatellites; i++) {
-				// BUG BUG Extract the values from the vector
-				if ((((i + 1) % 4) == 0) || (((((i + 1) % 4) != 0)) && (i == (numberOfSatellites - 1)))) {
-					sentence.Prepend(wxString::Format("$GPGSV,%d,%d,%d", totalSentences, sentenceNumber, numberOfSatellites));
+			for (int i = 0; i < satellitesInUse; i++) {
+				sentence += wxString::Format("%02d,%02d,%03d,%02d", satellites.at(i).id,
+					satellites.at(i).elevation, satellites.at(i).azimuth, satellites.at(i).snr);
+				if ((((i + 1) % 4) == 0) || (((((i + 1) % 4) != 0)) && (i == (satellitesInUse - 1)))) {
+					sentence.Prepend(wxString::Format("$GPGSV,%d,%d,%d,", totalSentences, sentenceNumber, satellitesInUse));
 					// Calculate checksum
 					sentence.Trim();
 					wxString checksum = ComputeChecksum(sentence);
@@ -518,10 +616,10 @@ void Windows_Sensor_Plugin::Notify() {
 					sentence.Append(checksum);
 					sentence.Append(wxT("\r\n"));
 					// Send to OpenCPN
-					//PushNMEABuffer(sentence);
-					//if (isVerbose) {
-					//	wxLogMessage(_T("Windows Sensor Plugin, Generated sentence: %s"), sentence);
-					//}
+					PushNMEABuffer(sentence);
+					if (isVerbose) {
+						wxLogMessage(_T("Windows Sensor Plugin, Generated sentence: %s"), sentence);
+					}
 					sentence.Empty();
 					sentenceNumber++;
 				}
@@ -536,7 +634,7 @@ void Windows_Sensor_Plugin::Notify() {
 				tm.Format("%H%M%S").ToAscii(), fixStatus == 1 ? 'A' : 'V', fabs(latitudeDegrees), fabs(latitudeMinutes), latitudeDegrees >= 0 ? 'N' : 'S', \
 				fabs(longitudeDegrees), fabs(longitudeMinutes), longitudeDegrees >= 0 ? 'E' : 'W', \
 				speedOverGround , trueHeading, tm.Format("%d%m%y").ToAscii(), \
-				fabs(magneticVariation),  magneticVariation >= 0 ? 'E' : 'W', GpsSelectionMode.at(fixMode));
+				fabs(magneticVariation),  magneticVariation >= 0 ? 'E' : 'W', GpsSelectionMode.at(selectionMode));
 
 
 			// Calculate & append checksum
