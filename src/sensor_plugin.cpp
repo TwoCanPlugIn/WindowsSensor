@@ -316,7 +316,7 @@ bool Windows_Sensor_Plugin::GetData(void) {
 
 		// Get the value
 		PROPVARIANT sensorDataValue;
-		//PropVariantInit(&sensorDataValue);
+		PropVariantInit(&sensorDataValue);
 		sensorData->GetSensorValue(sensorDataKey, &sensorDataValue);
 
 		if (sensorDataKey == SENSOR_DATA_TYPE_LATITUDE_DEGREES) {
@@ -412,7 +412,7 @@ bool Windows_Sensor_Plugin::GetData(void) {
 		// The following are vector types
 		// Refer to https://learn.microsoft.com/en-us/windows/win32/sensorsapi/retrieving-vector-types
 		
-		else if (sensorDataKey == SENSOR_DATA_TYPE_SATELLITES_IN_VIEW_AZIMUTH) {
+		/*else if (sensorDataKey == SENSOR_DATA_TYPE_SATELLITES_IN_VIEW_AZIMUTH) {
 			if ((VT_UI1 | VT_VECTOR) == V_VT(&sensorDataValue)) {
 				double *dblValue = (double *)sensorDataValue.caub.pElems;
 				for (unsigned int j = 0; j < satellitesInView; j++) {
@@ -450,9 +450,9 @@ bool Windows_Sensor_Plugin::GetData(void) {
 					intValue++;
 				}
 			}
-		}
+		}*/
 
-		//PropVariantClear(&sensorDataValue);
+		PropVariantClear(&sensorDataValue);
 	}
 	keyList->Release();
 	return true;

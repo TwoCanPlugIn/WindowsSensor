@@ -44,13 +44,13 @@ Windows_Sensor_Plugin_Settings::Windows_Sensor_Plugin_Settings(wxWindow* parent)
 	lblSensor->SetLabel(wxString::Format("%s", sensorName));
 	// Note the order of the check list box elements
 	// GGA
-	chkListSentence->Check(0, isGGA);
+	chkListSentence->Check(CHECKBOX::GGA, isGGA);
 	// GLL
-	chkListSentence->Check(1, isGLL);
+	chkListSentence->Check(CHECKBOX::GLL, isGLL);
 	// GSV
-	chkListSentence->Check(2, isGSV);
+	chkListSentence->Check(CHECKBOX::GSV, isGSV);
 	//RMC
-	chkListSentence->Check(3, isRMC);
+	chkListSentence->Check(CHECKBOX::RMC, isRMC);
 }
 
 Windows_Sensor_Plugin_Settings::~Windows_Sensor_Plugin_Settings() {
@@ -71,10 +71,10 @@ void Windows_Sensor_Plugin_Settings::OnRightClick(wxMouseEvent& event) {
 
 void Windows_Sensor_Plugin_Settings::OnOK(wxCommandEvent& event) {
 	// Note the order of the check list elements
-	isGGA = chkListSentence->IsChecked(0);
-	isGLL = chkListSentence->IsChecked(1);
-	isGSV = chkListSentence->IsChecked(2);
-	isRMC = chkListSentence->IsChecked(3);
+	isGGA = chkListSentence->IsChecked(CHECKBOX::GGA);
+	isGLL = chkListSentence->IsChecked(CHECKBOX::GLL);
+	isGSV = chkListSentence->IsChecked(CHECKBOX::GSV);
+	isRMC = chkListSentence->IsChecked(CHECKBOX::RMC);
 	EndModal(wxID_OK);
 }
 

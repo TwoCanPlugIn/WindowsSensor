@@ -12,6 +12,14 @@
 // Note wxFormBuilder used to generate UI
 #include "sensor_plugin_settings_base.h"
 
+// The Settings checkbox values
+typedef enum _checkbox {
+	GGA,
+	GLL,
+	GSV,
+	RMC
+} CHECKBOX;
+
 // Global Values
 extern bool isVerbose;
 extern bool isGGA;

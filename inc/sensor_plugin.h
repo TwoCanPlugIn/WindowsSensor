@@ -59,6 +59,7 @@ bool isRMC;
 // The PC's GPS Sensor Name
 wxString sensorName;
 
+
 // Structure for aggregating satellites used for position fix
 typedef struct _satellite_info {
 	unsigned int id;
